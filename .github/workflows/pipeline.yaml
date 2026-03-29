@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+
+  sast:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run SAST
+        run: |
+          bandit -r app -f json -o report.json || true
+
+      - name: Security Gate
+        run: |
+          if grep -q '"issue_severity": "HIGH"' report.json; then
+            echo "❌ High vulnerability found"
+            exit 1
+          else
+            echo "✅ No high vulnerabilities"
+          fi
+
+  deploy:
+    runs-on: self-hosted
+    needs: sast
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Docker
+        run: docker build -t myapp .
+
+      - name: Stop old container
+        run: docker stop myapp || true
+
+      - name: Remove old container
+        run: docker rm myapp || true
+
+      - name: Run container
+        run: docker run -d -p 8000:8000 --name myapp myapp
