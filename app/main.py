@@ -1,14 +1,24 @@
-from fastapi import FastAPI
 import sqlite3
+from flask import Flask, request
 
-app = FastAPI()
+app = Flask(__name__)
 
-@app.get("/users")
-def get_user(name: str):
-    conn = sqlite3.connect("test.db")
-    cursor = conn.cursor()
+conn = sqlite3.connect('test.db', check_same_thread=False)
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)')
 
     query = f"SELECT * FROM users WHERE name = '{name}'"
     cursor.execute(query)
 
-    return {"data": cursor.fetchall()}
+    # Уязвимость: SQL injection
+    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    c.execute(query)
+    user = c.fetchone()
+
+    if user:
+        return f"Welcome {username}"
+    else:
+        return "Login failed"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
