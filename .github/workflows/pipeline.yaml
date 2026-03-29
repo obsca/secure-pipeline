@@ -4,6 +4,9 @@ on:
   push:
     branches: [ "main" ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # чтобы actions использовали Node.js 24
+
 jobs:
 
   sast:
@@ -29,7 +32,7 @@ jobs:
           fi
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # теперь тоже GitHub-hosted
     needs: sast
 
     steps:
