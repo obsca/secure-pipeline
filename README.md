@@ -1,4 +1,4 @@
-#Описание
+# Описание
 secure-pipeline — это пример безопасного CI/CD pipeline с интеграцией SAST (Static Application Security Testing) на базе Bandit, работающий на GitHub-hosted runners.
 Проект включает:
 	•	Уязвимый тестовый код для демонстрации обнаружения уязвимостей.
