@@ -1,3 +1,4 @@
+# app/vulnerable_app.py
 import sqlite3
 from flask import Flask, request
 
@@ -7,8 +8,10 @@ conn = sqlite3.connect('test.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)')
 
-    query = f"SELECT * FROM users WHERE name = '{name}'"
-    cursor.execute(query)
+@app.route('/login')
+def login():
+    username = request.args.get('username')
+    password = request.args.get('password')
 
     # Уязвимость: SQL injection
     query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
