@@ -8,7 +8,7 @@ def get_user(name: str):
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE name = ?", (name,))
+    query = f"SELECT * FROM users WHERE name = '{name}'"
     cursor.execute(query)
 
     return {"data": cursor.fetchall()}
