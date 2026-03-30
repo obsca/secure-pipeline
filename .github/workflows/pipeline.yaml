@@ -25,6 +25,7 @@ jobs:
       - name: Security Gate
         run: |
           if grep -q '"issue_severity": "HIGH"' report.json; then
+             grep -q '"issue_severity": "MEDIUM"' report.json; then
             echo "❌ High vulnerability found"
             exit 1
           else
