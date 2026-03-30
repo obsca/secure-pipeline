@@ -14,7 +14,7 @@ def login():
     password = request.args.get('password')
 
     # Уязвимость: SQL injection
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    #query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
     c.execute(query)
     user = c.fetchone()
 
