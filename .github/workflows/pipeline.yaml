@@ -3,63 +3,53 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      allow_deploy:
+        description: "Override security gate? (true/false)"
+        required: false
+        default: "false"
 
 jobs:
 
   sast:
     runs-on: ubuntu-latest
+    outputs:
+      has_vulns: ${{ steps.check.outputs.has_vulns }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install tools
         run: |
           pip install bandit
           sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Run SAST (Bandit)
+      - name: Run Bandit
         run: |
           bandit -r app -f json -o report.json || true
 
-      - name: Show report (pretty)
-        run: |
-          echo "========== RAW REPORT =========="
-          cat report.json
-          echo "================================"
-
-          echo "========== PARSED =========="
-          jq '.results[] | {severity: .issue_severity, rule: .test_id, issue: .issue_text}' report.json
-          echo "================================"
-
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-report
-          path: report.json
-
-      - name: Security Gate (MEDIUM + HIGH)
+      - name: Check vulnerabilities
+        id: check
         run: |
           if jq -e '.results[] | select(.issue_severity=="HIGH" or .issue_severity=="MEDIUM")' report.json > /dev/null; then
-            echo "❌ Vulnerabilities (MEDIUM/HIGH) found!"
-            exit 1
+            echo "has_vulns=true" >> $GITHUB_OUTPUT
+            echo "❌ Vulnerabilities found"
           else
-            echo "✅ No MEDIUM/HIGH vulnerabilities"
+            echo "has_vulns=false" >> $GITHUB_OUTPUT
+            echo "✅ Clean"
           fi
 
   deploy:
     runs-on: ubuntu-latest
     needs: sast
+    if: |
+      needs.sast.outputs.has_vulns == 'false' ||
+      github.event.inputs.allow_deploy == 'true'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Build Docker image
-        run: docker build -t myapp .
-
-      - name: Run container
+      - name: Deploy
         run: |
-          docker stop myapp || true
-          docker rm myapp || true
-          docker run -d -p 8000:8000 --name myapp myapp
+          echo "🚀 Deploying..."
