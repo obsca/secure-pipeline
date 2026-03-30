@@ -2,7 +2,6 @@
 # app/vulnerable_app.py
 import sqlite3
 from flask import Flask, request
-
 app = Flask(__name__)
 
 conn = sqlite3.connect('test.db', check_same_thread=False)
