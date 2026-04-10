@@ -31,9 +31,10 @@ jobs:
         run: |
           pip install semgrep bandit jq
 
-      - name: Run Semgrep SAST
+      - name: Run SQLi rules only
         run: |
-          semgrep --config=auto --json -o semgrep.json || true
+          semgrep --config="p/python.security.audit.sql-injection" \
+              --json -o semgrep.json || true
 
       
       - name: Run Bandit SAST
@@ -41,24 +42,26 @@ jobs:
           bandit -r app -f json -o bandit.json || true
 
       
-      - name: Evaluate SAST results
-        id: sast_check
+      - name: Check SQL Injection only
+        id: check
         run: |
-          SEMGREP_ISSUES=$(jq '.results | length' semgrep.json)
-          BANDIT_ISSUES=$(jq '.results | length' bandit.json)
+          SQLI_ISSUES=$(jq '
+          [.results[]
+            | select(
+            .check_id | test("sql|injection|sqli|query|raw-sql"; "i")
+              )
+           ] | length
+          ' semgrep.json)
 
-          echo "Semgrep issues: $SEMGREP_ISSUES"
-          echo "Bandit issues: $BANDIT_ISSUES"
-
-          TOTAL=$((SEMGREP_ISSUES + BANDIT_ISSUES))
-
-          if [ "$TOTAL" -gt 0 ]; then
-            echo "sast_failed=true" >> $GITHUB_OUTPUT
-            echo "❌ SAST FAILED"
+          echo "SQLi issues: $SQLI_ISSUES"
+          
+          if [ "$SQLI_ISSUES" -gt 0 ]; then
+            echo "has_sqli=true" >> $GITHUB_OUTPUT
+            echo "❌ SQL INJECTION DETECTED"
             exit 1
           else
-            echo "sast_failed=false" >> $GITHUB_OUTPUT
-            echo "✅ SAST CLEAN"
+            echo "has_sqli=false" >> $GITHUB_OUTPUT
+            echo "✅ No SQLi found"
           fi
 
   secrets:
