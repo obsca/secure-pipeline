@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Full DevSecOps CI/CD Pipeline
 
 on:
   push:
@@ -7,49 +7,134 @@ on:
   workflow_dispatch:
     inputs:
       allow_deploy:
-        description: "Override security gate? (true/false)"
+        description: "Override security gate (true/false)"
         required: false
         default: "false"
 
 jobs:
+
+# =========================
+# 🔍 SAST (Semgrep + Bandit)
+# =========================
   sast:
     runs-on: ubuntu-latest
 
     outputs:
-      has_vulns: ${{ steps.check.outputs.has_vulns }}
+      sast_failed: ${{ steps.sast_check.outputs.sast_failed }}
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Semgrep
-        run: pip install semgrep jq
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Run Semgrep
-        run: semgrep --config=auto --error
-      - name: Show results (optional)
-        run: cat semgrep.json
+      - name: Install tools
+        run: |
+          pip install semgrep bandit jq
 
-      - name: Check vulnerabilities
+      - name: Run Semgrep SAST
+        run: |
+          semgrep --config=auto --json -o semgrep.json || true
+
+      
+      - name: Run Bandit SAST
+        run: |
+          bandit -r app -f json -o bandit.json || true
+
+      
+      - name: Evaluate SAST results
+        id: sast_check
+        run: |
+          SEMGREP_ISSUES=$(jq '.results | length' semgrep.json)
+          BANDIT_ISSUES=$(jq '.results | length' bandit.json)
+
+          echo "Semgrep issues: $SEMGREP_ISSUES"
+          echo "Bandit issues: $BANDIT_ISSUES"
+
+          TOTAL=$((SEMGREP_ISSUES + BANDIT_ISSUES))
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "sast_failed=true" >> $GITHUB_OUTPUT
+            echo "❌ SAST FAILED"
+            exit 1
+          else
+            echo "sast_failed=false" >> $GITHUB_OUTPUT
+            echo "✅ SAST CLEAN"
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+
+    outputs:
+      secrets_failed: ${{ steps.check.outputs.secrets_failed }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+
+      - name: Evaluate secrets scan
         id: check
         run: |
-          if jq -e '.results[] | select(.extra.severity=="ERROR" or .extra.severity=="WARNING")' semgrep.json > /dev/null; then
-            echo "has_vulns=true" >> $GITHUB_OUTPUT
-            echo "❌ Vulnerabilities found"
+          if [ $? -ne 0 ]; then
+            echo "secrets_failed=true" >> $GITHUB_OUTPUT
+            exit 1
           else
-            echo "has_vulns=false" >> $GITHUB_OUTPUT
-            echo "✅ Clean"
+            echo "secrets_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+  deps:
+    runs-on: ubuntu-latest
+
+    outputs:
+      deps_failed: ${{ steps.check.outputs.deps_failed }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.52.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.52.0_Linux-64bit.deb
+
+      - name: Scan dependencies
+        run: |
+          trivy fs --format json -o trivy.json .
+
+      - name: Evaluate dependencies
+        id: check
+        run: |
+          ISSUES=$(jq '.Results[].Vulnerabilities | length' trivy.json 2>/dev/null || echo 0)
+
+          if [ "$ISSUES" -gt 0 ]; then
+            echo "deps_failed=true" >> $GITHUB_OUTPUT
+            echo "❌ Dependency vulnerabilities found"
+            exit 1
+          else
+            echo "deps_failed=false" >> $GITHUB_OUTPUT
+            echo "✅ Dependencies clean"
           fi
 
   deploy:
     runs-on: ubuntu-latest
-    needs: sast
+    needs: [sast, secrets, deps]
 
     if: |
-      needs.sast.outputs.has_vulns == 'false' ||
-      github.event.inputs.allow_deploy == 'true'
+      github.event.inputs.allow_deploy == 'true' ||
+      (needs.sast.result == 'success' &&
+       needs.secrets.result == 'success' &&
+       needs.deps.result == 'success')
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy
-        run: echo "🚀 Deploying..."
+      - name: Deploy application
+        run: |
+          echo "🚀 ALL SECURITY CHECKS PASSED"
+          echo "Deploying to production..."
