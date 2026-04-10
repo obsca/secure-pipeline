@@ -25,9 +25,7 @@ jobs:
         run: pip install semgrep jq
 
       - name: Run Semgrep
-        run: |
-          semgrep --config=auto --json -o semgrep.json || true
-
+        run: semgrep --config=auto --error
       - name: Show results (optional)
         run: cat semgrep.json
 
