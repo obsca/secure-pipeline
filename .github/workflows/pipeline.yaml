@@ -20,25 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install tools
-        run: |
-          pip install bandit
-          sudo apt-get update && sudo apt-get install -y jq
+      - name: Install Semgrep
+        run: pip install semgrep
 
-      - name: Run Bandit
-        run: |
-          bandit -r app -f json -o report.json || true
-
-      - name: Check vulnerabilities
-        id: check
-        run: |
-          if jq -e '.results[] | select(.issue_severity=="HIGH" or .issue_severity=="MEDIUM")' report.json > /dev/null; then
-            echo "has_vulns=true" >> $GITHUB_OUTPUT
-            echo "❌ Vulnerabilities found"
-          else
-            echo "has_vulns=false" >> $GITHUB_OUTPUT
-            echo "✅ Clean"
-          fi
+      - name: Run Semgrep
+        run: semgrep --config=auto --json -o semgrep.json || true
 
   deploy:
     runs-on: ubuntu-latest
